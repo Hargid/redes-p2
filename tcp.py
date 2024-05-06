@@ -52,6 +52,8 @@ class Servidor:
             
             self.rede.enviar(handshake, src_addr)
             
+        
+       
             
             
             if self.callback:
@@ -73,6 +75,7 @@ class Conexao:
         self.seqAns = seqAns
         self.segmentosResiduais = []
         self.callback = None
+        self.isConected = True
         self.timer = asyncio.get_event_loop().call_later(1, self._exemplo_timer)  # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
         #self.timer.cancel()   # é possível cancelar o timer chamando esse método; esta linha é só um exemplo e pode ser removida
 
@@ -85,15 +88,19 @@ class Conexao:
         # Chame self.callback(self, dados) para passar dados para a camada de aplicação após
         # garantir que eles não sejam duplicados e que tenham sido recebidos em ordem.
         
-        #print('recebido payload: %r' % payload)
-        if (seq_no == self.ackAns):
-            if len(payload) > 0:
-                self.ackAns+= len(payload)
-                self.callback(self, payload)
-                ackMsg = make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns, self.ackAns, FLAGS_ACK)
-                self.servidor.rede.enviar(fix_checksum(ackMsg, self.id_conexao[0], self.id_conexao[2]), self.id_conexao[2])
+        if self.isConected:
+            if (seq_no == self.ackAns):
+                if len(payload) > 0:
+                    self.ackAns+= len(payload)
+                    self.callback(self, payload)
+                    ackMsg = make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns, self.ackAns, FLAGS_ACK)
+                    self.servidor.rede.enviar(fix_checksum(ackMsg, self.id_conexao[0], self.id_conexao[2]), self.id_conexao[2])
                 
-
+            if (flags & FLAGS_FIN) == FLAGS_FIN:
+                self.callback(self, b'')
+                self.ackAns+= 1
+                self.fechar()
+            
         
         
 
@@ -115,15 +122,12 @@ class Conexao:
         # que você construir para a camada de rede.
         
         dadosResiduais = b''
-        #print("PONTO 1 self.seqAns = ", self.seqAns)        
         ackMsg = make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns+1, self.ackAns, FLAGS_ACK)
         if len(dados) <= MSS: #Cabe de uma vez
             self.seqAns+=len(dados)
-            #print("PONTO 2 self.seqAns = ", self.seqAns)
             enviarDados = ackMsg + dados
             
         else: #Necessario dividir
-            #print("PONTO 3 self.seqAns = ", self.seqAns) 
             self.seqAns+=MSS  
             enviarDados = ackMsg + dados[:MSS]
             dadosResiduais = dados[MSS:]
@@ -142,4 +146,10 @@ class Conexao:
         Usado pela camada de aplicação para fechar a conexão
         """
         # TODO: implemente aqui o fechamento de conexão
-        pass
+        finMsg = make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns+1, self.ackAns, FLAGS_ACK | FLAGS_FIN)
+        finMsg = fix_checksum(finMsg, self.id_conexao[0], self.id_conexao[2])
+        self.servidor.rede.enviar(finMsg, self.id_conexao[2])
+        self.isConected = False
+        
+        
+        
