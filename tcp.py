@@ -34,7 +34,7 @@ class Servidor:
 
         if (flags & FLAGS_SYN) == FLAGS_SYN:
             #Numero aleatorio para sequência de segmentos do servidor:
-            seqNoAns = int.from_bytes(os.urandom(4), byteorder='big')
+            seqAns = int.from_bytes(os.urandom(4), byteorder='big')
             
             #Proximo segmento esperado
             ack_no = seq_no + 1
@@ -42,12 +42,12 @@ class Servidor:
             # A flag SYN estar setada significa que é um cliente tentando estabelecer uma conexão nova
             # TODO: talvez você precise passar mais coisas para o construtor de conexão
             
-            conexao = self.conexoes[id_conexao] = Conexao(self, id_conexao, seq_no)
+            conexao = self.conexoes[id_conexao] = Conexao(self, id_conexao, seqAns, ack_no)
             
             # TODO: você precisa fazer o handshake aceitando a conexão. Escolha se você acha melhor
             # fazer aqui mesmo ou dentro da classe Conexao.
             #Handshake -> enviando ID da conexao para o cliente
-            handshake = make_header(dst_port, src_port, seqNoAns, ack_no, FLAGS_SYN|FLAGS_ACK)
+            handshake = make_header(dst_port, src_port, seqAns, ack_no, FLAGS_SYN|FLAGS_ACK)
             handshake = fix_checksum(handshake, dst_addr, src_addr)
             
             self.rede.enviar(handshake, src_addr)
@@ -65,11 +65,12 @@ class Servidor:
 
 
 class Conexao:
-    def __init__(self, servidor, id_conexao, seqNoAns):
+    def __init__(self, servidor, id_conexao, seqAns, ackAns):
         self.servidor = servidor
         self.id_conexao = id_conexao
+        self.ackAns = ackAns
         #Numero de Sequencia da Conexao
-        self.seqNoAns = seqNoAns
+        self.seqAns = seqAns
         self.callback = None
         self.timer = asyncio.get_event_loop().call_later(1, self._exemplo_timer)  # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
         #self.timer.cancel()   # é possível cancelar o timer chamando esse método; esta linha é só um exemplo e pode ser removida
@@ -82,7 +83,18 @@ class Conexao:
         # TODO: trate aqui o recebimento de segmentos provenientes da camada de rede.
         # Chame self.callback(self, dados) para passar dados para a camada de aplicação após
         # garantir que eles não sejam duplicados e que tenham sido recebidos em ordem.
-        print('recebido payload: %r' % payload)
+        
+        #print('recebido payload: %r' % payload)
+        if (seq_no == self.ackAns):
+            if len(payload) > 0:
+                self.ackAns+= len(payload)
+                self.callback(self, payload)
+                ackMsg = make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns, self.ackAns, FLAGS_ACK)
+                self.servidor.rede.enviar(fix_checksum(ackMsg, self.id_conexao[0], self.id_conexao[2]), self.id_conexao[2])
+                
+
+        
+        
 
     # Os métodos abaixo fazem parte da API
 
