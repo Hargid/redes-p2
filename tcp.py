@@ -71,6 +71,7 @@ class Conexao:
         self.ackAns = ackAns
         #Numero de Sequencia da Conexao
         self.seqAns = seqAns
+        self.segmentosResiduais = []
         self.callback = None
         self.timer = asyncio.get_event_loop().call_later(1, self._exemplo_timer)  # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
         #self.timer.cancel()   # é possível cancelar o timer chamando esse método; esta linha é só um exemplo e pode ser removida
@@ -114,20 +115,24 @@ class Conexao:
         # que você construir para a camada de rede.
         
         dadosResiduais = b''
-        print("PONTO 1 self.seqAns = ", self.seqAns)
-        ackMsg = make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns, self.ackAns, FLAGS_ACK)
-        if len(dados) <= (MSS + len(ackMsg)): #Cabe de uma vez
-            print("PONTO 2 self.seqAns = ", self.seqAns)
+        #print("PONTO 1 self.seqAns = ", self.seqAns)        
+        ackMsg = make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns+1, self.ackAns, FLAGS_ACK)
+        if len(dados) <= MSS: #Cabe de uma vez
+            self.seqAns+=len(dados)
+            #print("PONTO 2 self.seqAns = ", self.seqAns)
             enviarDados = ackMsg + dados
-            segmento = fix_checksum(make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns+1, self.ackAns, FLAGS_ACK), self.id_conexao[0], self.id_conexao[2])
+            
         else: #Necessario dividir
-            print("PONTO 3 self.seqAns = ", self.seqAns)
-            enviarDados = ackMsg + dados[:MSS-len(ackMsg)]
-            dadosResiduais = dados[MSS-len(ackMsg):]
-            segmento = fix_checksum(make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns, self.ackAns, FLAGS_ACK), self.id_conexao[0], self.id_conexao[2])
+            #print("PONTO 3 self.seqAns = ", self.seqAns) 
+            self.seqAns+=MSS  
+            enviarDados = ackMsg + dados[:MSS]
+            dadosResiduais = dados[MSS:]
         
+	
+        enviarDados = fix_checksum(enviarDados, self.id_conexao[0], self.id_conexao[2])
+        self.segmentosResiduais.append(enviarDados)
+        self.servidor.rede.enviar(enviarDados, self.id_conexao[2])
         
-        self.servidor.rede.enviar(segmento, self.id_conexao[2])
         if len(dadosResiduais) > 0:
             self.enviar(dadosResiduais)
         
