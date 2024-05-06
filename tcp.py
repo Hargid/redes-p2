@@ -112,7 +112,25 @@ class Conexao:
         # TODO: implemente aqui o envio de dados.
         # Chame self.servidor.rede.enviar(segmento, dest_addr) para enviar o segmento
         # que você construir para a camada de rede.
-        pass
+        
+        dadosResiduais = b''
+        print("PONTO 1 self.seqAns = ", self.seqAns)
+        ackMsg = make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns, self.ackAns, FLAGS_ACK)
+        if len(dados) <= (MSS + len(ackMsg)): #Cabe de uma vez
+            print("PONTO 2 self.seqAns = ", self.seqAns)
+            enviarDados = ackMsg + dados
+            segmento = fix_checksum(make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns+1, self.ackAns, FLAGS_ACK), self.id_conexao[0], self.id_conexao[2])
+        else: #Necessario dividir
+            print("PONTO 3 self.seqAns = ", self.seqAns)
+            enviarDados = ackMsg + dados[:MSS-len(ackMsg)]
+            dadosResiduais = dados[MSS-len(ackMsg):]
+            segmento = fix_checksum(make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns, self.ackAns, FLAGS_ACK), self.id_conexao[0], self.id_conexao[2])
+        
+        
+        self.servidor.rede.enviar(segmento, self.id_conexao[2])
+        if len(dadosResiduais) > 0:
+            self.enviar(dadosResiduais)
+        
 
     def fechar(self):
         """
