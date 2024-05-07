@@ -76,7 +76,8 @@ class Conexao:
         self.segmentosResiduais = []
         self.callback = None
         self.isConected = True
-        self.timer = asyncio.get_event_loop().call_later(1, self._exemplo_timer)  # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
+        self.timer = None
+        #asyncio.get_event_loop().call_later(1, self._exemplo_timer)  # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
         #self.timer.cancel()   # é possível cancelar o timer chamando esse método; esta linha é só um exemplo e pode ser removida
 
     def _exemplo_timer(self):
@@ -84,15 +85,19 @@ class Conexao:
         #print('Este é um exemplo de como fazer um timer')
         
         #Utilizarei essa funcao pra reenviar os dados que estavam nos segmentos residuais.
+        pass 
+        """
         if not (self.segmentosResiduais == []):
             dados = self.segmentosResiduais.pop(0)
-            self.segmentosResiduais.insert(0, dados)
+            
             self.servidor.rede.enviar(dados, self.id_conexao[2])
             if self.timer: 
                 self.timer.cancel()
                 self.timer = None
+            if (ack_no < self.seqAns):
+                self.segmentosResiduais.insert(0, dados)
             self.timer = asyncio.get_event_loop().call_later(1, self._exemplo_timer)
-            
+           """
 
     def _rdt_rcv(self, seq_no, ack_no, flags, payload):
         # TODO: trate aqui o recebimento de segmentos provenientes da camada de rede.
@@ -101,13 +106,27 @@ class Conexao:
         
         #Conexão está ativa
         if self.isConected:
-            if (seq_no == self.ackAns):
+            if (seq_no == self.ackAns ) and ((FLAGS_ACK & flags) == FLAGS_ACK ):
                 if len(payload) > 0:
                     self.ackAns+= len(payload)
                     self.callback(self, payload)
                     ackMsg = make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns, self.ackAns, FLAGS_ACK)
                     self.servidor.rede.enviar(fix_checksum(ackMsg, self.id_conexao[0], self.id_conexao[2]), self.id_conexao[2])
                 
+            else:
+                if (ack_no < self.seqAns ) and ((FLAGS_ACK & flags) == FLAGS_ACK ):
+                    self.seqAns = ack_no +1
+                
+                    if (len(self.segmentosResiduais) > 0):
+                        payload = self.segmentosResiduais.pop(0)
+                        self.ackAns+= len(payload)
+                        self.callback(self, payload)
+                        ackMsg = make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns, self.ackAns, FLAGS_ACK)
+                        self.servidor.rede.enviar(fix_checksum(ackMsg, self.id_conexao[0], self.id_conexao[2]), self.id_conexao[2])
+                
+            #if (seq_no == self.ackAns) and (ack_no == self.seqAns) and ((FLAGS_ACK & flags) == FLAGS_ACK ):
+                
+            
             #Pedido de Encerramento de conexões
             if (flags & FLAGS_FIN) == FLAGS_FIN:
                 self.callback(self, b'')
@@ -137,7 +156,7 @@ class Conexao:
         dadosResiduais = b''
         ackMsg = make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns+1, self.ackAns, FLAGS_ACK)
         if len(dados) <= MSS: #Cabe de uma vez
-            self.seqAns+=len(dados)
+            self.seqAns+= len(dados)
             enviarDados = ackMsg + dados
             
         else: #Necessario dividir
