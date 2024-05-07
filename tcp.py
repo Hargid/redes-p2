@@ -101,17 +101,13 @@ class Conexao:
         
         #Conexão está ativa
         if self.isConected:
-            if (seq_no == self.seqAns):
-                    if len(payload) > 0:
-                        self.ackAns+= len(payload)
-                        self.callback(self, payload)
-                        ackMsg = make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns, self.ackAns, FLAGS_ACK)
-                        self.servidor.rede.enviar(fix_checksum(ackMsg, self.id_conexao[0], self.id_conexao[2]), self.id_conexao[2])
+            if (seq_no == self.ackAns):
+                if len(payload) > 0:
+                    self.ackAns+= len(payload)
+                    self.callback(self, payload)
+                    ackMsg = make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns, self.ackAns, FLAGS_ACK)
+                    self.servidor.rede.enviar(fix_checksum(ackMsg, self.id_conexao[0], self.id_conexao[2]), self.id_conexao[2])
                 
-            
-            
-            
-                                
             #Pedido de Encerramento de conexões
             if (flags & FLAGS_FIN) == FLAGS_FIN:
                 self.callback(self, b'')
