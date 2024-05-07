@@ -81,7 +81,7 @@ class Conexao:
         #asyncio.get_event_loop().call_later(1, self._exemplo_timer)  # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
         #self.timer.cancel()   # é possível cancelar o timer chamando esse método; esta linha é só um exemplo e pode ser removida
 
-    def _timePause(self):
+    def timePause(self):
         # Esta função é só um exemplo e pode ser removida
         #print('Este é um exemplo de como fazer um timer')
         
@@ -115,33 +115,29 @@ class Conexao:
         
         #Conexão está ativa
         if self.isConected:
-            if (seq_no == self.ackAns ) and ((FLAGS_ACK & flags) == FLAGS_ACK ):
-                if len(payload) > 0:
-                    self.ackAns+= len(payload)
-                    self.callback(self, payload)
-                    ackMsg = make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns, self.ackAns, FLAGS_ACK)
-                    self.servidor.rede.enviar(fix_checksum(ackMsg, self.id_conexao[0], self.id_conexao[2]), self.id_conexao[2])
-                
+            if ((FLAGS_ACK & flags) == FLAGS_ACK ):
+                if (seq_no == self.ackAns):
+                    if len(payload) > 0:
+                        self.ackAns+= len(payload)
+                        self.callback(self, payload)
+                        ackMsg = make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns, self.ackAns, FLAGS_ACK)
+                        self.servidor.rede.enviar(fix_checksum(ackMsg, self.id_conexao[0], self.id_conexao[2]), self.id_conexao[2])
+                elif (ack_no > self.seqAns ):
+                    self.seqAns = ack_no +1
+                elif (ack_no < self.ackAns): #ack_no > self.seqAns
+                    #COMO REENVIAR DADOS?
+                    self.ackAns = ack_no + 1
+                    #self.enviar(self.segmentosResiduais().pop())
+                    if (len(self.segmentosResiduais) > 0):
+                        payload = self.segmentosResiduais.pop(0)
+                        self.ackAns+= len(payload)
+                        self.callback(self, payload)
+                        ackMsg = make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns, self.ackAns, FLAGS_ACK)
+                        self.timePause
             else:# CASOS POSSIVEIS: seq_no < self.ackAns; seq_no > self.ackAns, seq_no == self.ackAns e ¬FLAG_ACKS
-                if ((FLAGS_ACK & flags) == FLAGS_ACK ):
-                    if (ack_no > self.seqAns ):
-                        self.seqAns = ack_no +1
-
-                    elif (ack_no < self.ackAns): #ack_no > self.seqAns
-                        #COMO REENVIAR DADOS?
-                        self.ackAns = ack_no + 1
-                        #self.enviar(self.segmentosResiduais().pop())
-                        
-                        if (len(self.segmentosResiduais) > 0):
-                            payload = self.segmentosResiduais.pop(0)
-                            self.ackAns+= len(payload)
-                            self.callback(self, payload)
-                            ackMsg = make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns, self.ackAns, FLAGS_ACK)
-                            self.servidor.rede.enviar(fix_checksum(ackMsg, self.id_conexao[0], self.id_conexao[2]), self.id_conexao[2])
-                else:
-                    #FLAGS_ACK False
-                    self.timer = syncio.get_event_loop().call_later(1, self._timePause) 
-            #if (seq_no == self.ackAns) and (ack_no == self.seqAns) and ((FLAGS_ACK & flags) == FLAGS_ACK ):
+                #FLAGS_ACK False
+                self.timer = syncio.get_event_loop().call_later(1, self._timePause) 
+                #if (seq_no == self.ackAns) and (ack_no == self.seqAns) and ((FLAGS_ACK & flags) == FLAGS_ACK ):
                 
             
             #Pedido de Encerramento de conexões
@@ -186,7 +182,7 @@ class Conexao:
         self.segmentosResiduais.append(enviarDados)
         self.servidor.rede.enviar(enviarDados, self.id_conexao[2])
         
-        self.timer = asyncio.get_event_loop().call_later(1, self._timePause)
+        self.timePause
         
         if len(dadosResiduais) > 0:
             self.enviar(dadosResiduais)
