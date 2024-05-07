@@ -81,21 +81,38 @@ class Conexao:
 
     def _exemplo_timer(self):
         # Esta função é só um exemplo e pode ser removida
-        print('Este é um exemplo de como fazer um timer')
+        #print('Este é um exemplo de como fazer um timer')
+        
+        #Utilizarei essa funcao pra reenviar os dados que estavam nos segmentos residuais.
+        if not (self.segmentosResiduais == []):
+            dados = self.segmentosResiduais.pop(0)
+            self.segmentosResiduais.insert(0, dados)
+            self.servidor.rede.enviar(dados, self.id_conexao[2])
+            if self.timer: 
+                self.timer.cancel()
+                self.timer = None
+            self.timer = asyncio.get_event_loop().call_later(1, self._exemplo_timer)
+            
 
     def _rdt_rcv(self, seq_no, ack_no, flags, payload):
         # TODO: trate aqui o recebimento de segmentos provenientes da camada de rede.
         # Chame self.callback(self, dados) para passar dados para a camada de aplicação após
         # garantir que eles não sejam duplicados e que tenham sido recebidos em ordem.
         
+        #Conexão está ativa
         if self.isConected:
-            if (seq_no == self.ackAns):
-                if len(payload) > 0:
-                    self.ackAns+= len(payload)
-                    self.callback(self, payload)
-                    ackMsg = make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns, self.ackAns, FLAGS_ACK)
-                    self.servidor.rede.enviar(fix_checksum(ackMsg, self.id_conexao[0], self.id_conexao[2]), self.id_conexao[2])
+            if (seq_no == self.seqAns):
+                    if len(payload) > 0:
+                        self.ackAns+= len(payload)
+                        self.callback(self, payload)
+                        ackMsg = make_header(self.id_conexao[3], self.id_conexao[1], self.seqAns, self.ackAns, FLAGS_ACK)
+                        self.servidor.rede.enviar(fix_checksum(ackMsg, self.id_conexao[0], self.id_conexao[2]), self.id_conexao[2])
                 
+            
+            
+            
+                                
+            #Pedido de Encerramento de conexões
             if (flags & FLAGS_FIN) == FLAGS_FIN:
                 self.callback(self, b'')
                 self.ackAns+= 1
@@ -136,6 +153,13 @@ class Conexao:
         enviarDados = fix_checksum(enviarDados, self.id_conexao[0], self.id_conexao[2])
         self.segmentosResiduais.append(enviarDados)
         self.servidor.rede.enviar(enviarDados, self.id_conexao[2])
+        
+        #INSERINDO TIMER
+        if self.timer: #reset timer 
+            self.timer.cancel()
+            self.time = None
+        #Inicia novo timer
+        self.timer = asyncio.get_event_loop().call_later(1, self._exemplo_timer)
         
         if len(dadosResiduais) > 0:
             self.enviar(dadosResiduais)
